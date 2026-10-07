@@ -1,0 +1,51 @@
+{
+  "name": "lightspeed-mods",
+  "description": "LightSpeedWP mods: guardrails that enforce the org and project standards at the point the agent would break them.",
+  "owner": {
+    "name": "Zared Rogers"
+  },
+  "plugins": [
+    {
+      "name": "secret-sentinel",
+      "description": "Refuses to write a credential into a file, and refuses to author a credentials file at all. Names the kind of secret, never the value.",
+      "version": "0.1.0",
+      "source": "./mods/secret-sentinel"
+    },
+    {
+      "name": "wp-guardrails",
+      "description": "Blocks git commit and push, blocks reading wp-config.php whole, and adds the WP-CLI memory flag to any bare wp command.",
+      "version": "0.1.0",
+      "source": "./mods/wp-guardrails"
+    },
+    {
+      "name": "verify-gate",
+      "description": "Reads the output of lint, test and PHP checks, so a failure hidden behind | tail or an exit 0 cannot pass as a success.",
+      "version": "0.2.0",
+      "source": "./mods/verify-gate"
+    },
+    {
+      "name": "org-conformance",
+      "description": "A branch line above the prompt, and /branch and /pr, driven by the org's own validator and PR templates in ~/.github.",
+      "version": "0.2.0",
+      "source": "./mods/org-conformance"
+    },
+    {
+      "name": "browser-arbiter",
+      "description": "Pins the session to the first browser MCP it uses, so playwright and chrome-devtools cannot fight over one profile. /browser-release unpins.",
+      "version": "0.1.0",
+      "source": "./mods/browser-arbiter"
+    },
+    {
+      "name": "changelog-guard",
+      "description": "Runs the org's Changelog Quality rules on entries as they are written, before CI blocks the merge. /changelog checks the branch.",
+      "version": "0.2.0",
+      "source": "./mods/changelog-guard"
+    },
+    {
+      "name": "next-steps",
+      "description": "Likely next prompts after each turn; /next asks them as a question for the VS Code panel. Fork of hamzafer/claude-code-mods next-steps (MIT).",
+      "version": "0.2.0",
+      "source": "./mods/next-steps"
+    }
+  ]
+}

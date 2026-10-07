@@ -1,0 +1,6 @@
+{
+  "name": "secret-sentinel",
+  "version": "0.1.0",
+  "description": "Implements the org secrets-scanner hook: stops credentials reaching a file, a repo or the transcript",
+  "author": { "name": "LightSpeedWP" }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "wp-guardrails",
+  "version": "0.1.0",
+  "description": "Enforces the never-commit rule, the WP-CLI memory flag, and keeps secrets out of the transcript",
+  "author": { "name": "Zared Rogers" }
+}

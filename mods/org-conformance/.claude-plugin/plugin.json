@@ -1,0 +1,9 @@
+{
+  "name": "org-conformance",
+  "version": "0.2.0",
+  "description": "Keeps branches and PRs aligned to the LightSpeedWP org standard in ~/.github",
+  "author": {
+    "name": "Zared Rogers"
+  },
+  "types": "./types/index.d.ts"
+}

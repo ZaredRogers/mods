@@ -1,0 +1,6 @@
+{
+  "name": "browser-arbiter",
+  "version": "0.1.0",
+  "description": "Pins the session to one browser MCP so the two never collide",
+  "author": { "name": "Zared Rogers" }
+}

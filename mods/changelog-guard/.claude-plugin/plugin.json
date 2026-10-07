@@ -1,0 +1,8 @@
+{
+  "name": "changelog-guard",
+  "version": "0.2.0",
+  "description": "Runs the org's Changelog Quality rules locally, before CI blocks the merge",
+  "author": {
+    "name": "LightSpeedWP"
+  }
+}
