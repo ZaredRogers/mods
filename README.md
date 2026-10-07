@@ -26,7 +26,7 @@ Three (`verify-gate`, `org-conformance`, `changelog-guard`) only report — exce
 
 The VS Code chat panel runs mods but draws none of their bands, panes, toasts or status lines,
 and has no prompt box a plugin can fill. It does draw the AskUserQuestion dialog (`$.ui.ask`).
-So each mod with UI checks `$.session.surfaces()` and, in the panel only, falls back to:
+So each mod with UI detects the panel — which reports **no surface at all** (`$.session.surfaces()` is empty), so the check is an empty list plus `CLAUDE_CODE_ENTRYPOINT=claude-vscode` — and, in the panel only, falls back to:
 
 | Mod | In the panel |
 |---|---|

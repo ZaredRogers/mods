@@ -14,8 +14,8 @@ function engine(on: any, surface: string, pick: string) {
   const asked: string[] = []
   const sent: string[] = []
   let reads = 0
-  mock.env(on, { HOME: '/home/test' })
-  on('session.surfaces', () => ({ value: [surface] }))
+  mock.env(on, { HOME: '/home/test', CLAUDE_CODE_ENTRYPOINT: surface === 'panel' ? 'claude-vscode' : 'cli' })
+  on('session.surfaces', () => ({ value: surface === 'panel' ? [] : [surface] }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
@@ -44,7 +44,7 @@ async function turnWithIssue($: any) {
 
 describe('changelog-guard in the VS Code panel', () => {
   test('asks once at the end of the turn and sends the fix request on yes', async ($, on) => {
-    const { asked, sent } = engine(on, 'vscode', 'Ask Claude to fix them')
+    const { asked, sent } = engine(on, 'panel', 'Ask Claude to fix them')
     await turnWithIssue($)
     expect(asked.length).toBe(1)
     expect(asked[0]).toContain('would block the merge')

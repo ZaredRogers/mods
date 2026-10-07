@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'claude-code/testing'
+import { describe, expect, mock, test } from 'claude-code/testing'
 
 const wait = () => new Promise(done => (globalThis as any).setTimeout(done, 10))
 
@@ -6,7 +6,8 @@ const wait = () => new Promise(done => (globalThis as any).setTimeout(done, 10))
 function engine(on: any, surface: string, pick: string) {
   const asked: string[] = []
   const sent: string[] = []
-  on('session.surfaces', () => ({ value: [surface] }))
+  mock.env(on, { CLAUDE_CODE_ENTRYPOINT: surface === 'panel' ? 'claude-vscode' : 'cli' })
+  on('session.surfaces', () => ({ value: surface === 'panel' ? [] : [surface] }))
   on('ui.toast', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('turn.start', (_$: any, e: any) => ({ turnId: e.turnId }))
@@ -32,7 +33,7 @@ async function turnWithFailure($: any) {
 
 describe('verify-gate in the VS Code panel', () => {
   test('asks once at the end of the turn and sends the fix request on yes', async ($, on) => {
-    const { asked, sent } = engine(on, 'vscode', 'Ask Claude to fix them')
+    const { asked, sent } = engine(on, 'panel', 'Ask Claude to fix them')
     await turnWithFailure($)
     expect(asked.length).toBe(1)
     expect(asked[0]).toContain('3 phpcs errors')
@@ -41,7 +42,7 @@ describe('verify-gate in the VS Code panel', () => {
   })
 
   test('sends nothing when dismissed', async ($, on) => {
-    const { asked, sent } = engine(on, 'vscode', 'Dismiss')
+    const { asked, sent } = engine(on, 'panel', 'Dismiss')
     await turnWithFailure($)
     expect(asked.length).toBe(1)
     expect(sent.length).toBe(0)

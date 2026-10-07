@@ -9,10 +9,10 @@ const run = (stdout: string, exitCode = 0) => ({
 // A workspace like SD's: the root is no repo; the theme and an upstream clone are.
 function engine(on: any, surface: string, branches: Record<string, string>) {
   const asked: string[] = []
-  mock.env(on, { HOME: '/home/test' })
+  mock.env(on, { HOME: '/home/test', CLAUDE_CODE_ENTRYPOINT: surface === 'panel' ? 'claude-vscode' : 'cli' })
   mock.clock(on, { now: 100000 })
   on('session.root', () => ({ value: '/work' }))
-  on('session.surfaces', () => ({ value: [surface] }))
+  on('session.surfaces', () => ({ value: surface === 'panel' ? [] : [surface] }))
   on('turn.complete', () => ({ text: '' }))
   on('process.run', (_$: any, e: any) => {
     const argv: string[] = [...e.argv]
@@ -39,7 +39,7 @@ const endTurn = async ($: any, turnId: string) => {
 
 describe('org-conformance in the VS Code panel', () => {
   test('warns once about an off-standard repo, ignoring the upstream clone', async ($, on) => {
-    const { asked } = engine(on, 'vscode', { '/work/theme': 'fixes', '/work/agent-skills': 'trunk' })
+    const { asked } = engine(on, 'panel', { '/work/theme': 'fixes', '/work/agent-skills': 'trunk' })
     await endTurn($, 't1')
     await endTurn($, 't2')
     expect(asked.length).toBe(1)
@@ -49,7 +49,7 @@ describe('org-conformance in the VS Code panel', () => {
   })
 
   test('stays quiet when the repo conforms', async ($, on) => {
-    const { asked } = engine(on, 'vscode', { '/work/theme': 'feat/theme-404', '/work/agent-skills': 'trunk' })
+    const { asked } = engine(on, 'panel', { '/work/theme': 'feat/theme-404', '/work/agent-skills': 'trunk' })
     await endTurn($, 't1')
     expect(asked.length).toBe(0)
   })

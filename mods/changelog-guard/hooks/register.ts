@@ -169,6 +169,17 @@ async function baseEntries($: any, path: string): Promise<string[] | null> {
   }
 }
 
+/**
+ * True in the VS Code chat panel, which draws no band, toast or status line.
+ * Measured on 2.1.292: the panel reports no surface at all (`surfaces()` is
+ * empty), so its process's entrypoint is what says it is the panel.
+ */
+async function isPanel($: any): Promise<boolean> {
+  const surfaces = await $.session.surfaces()
+  if (surfaces.includes('vscode')) return true
+  return surfaces.length === 0 && (await $.env.get('CLAUDE_CODE_ENTRYPOINT')) === 'claude-vscode'
+}
+
 export const register: Register = on => {
   let touchedSource = false
   let touchedChangelog = false
@@ -238,7 +249,7 @@ export const register: Register = on => {
     if (e.agentId || pending.length === 0) return r
     const issues = pending
     pending = []
-    if (!(await $.session.surfaces()).includes('vscode')) return r
+    if (!(await isPanel($))) return r
 
     void $.ui
       .ask(`${issues.join(' ')} Ask Claude to fix the entries?`, {

@@ -20,13 +20,13 @@
     {
       "name": "verify-gate",
       "description": "Reads the output of lint, test and PHP checks, so a failure hidden behind | tail or an exit 0 cannot pass as a success.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "source": "./mods/verify-gate"
     },
     {
       "name": "org-conformance",
       "description": "A branch line above the prompt, and /branch and /pr, driven by the org's own validator and PR templates in ~/.github.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "source": "./mods/org-conformance"
     },
     {
@@ -38,7 +38,7 @@
     {
       "name": "changelog-guard",
       "description": "Runs the org's Changelog Quality rules on entries as they are written, before CI blocks the merge. /changelog checks the branch.",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "source": "./mods/changelog-guard"
     },
     {

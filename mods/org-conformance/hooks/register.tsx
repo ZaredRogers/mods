@@ -174,6 +174,17 @@ async function refresh($: any, isForced = false) {
   await update($, status, () => next)
 }
 
+/**
+ * True in the VS Code chat panel, which draws no band, toast or status line.
+ * Measured on 2.1.292: the panel reports no surface at all (`surfaces()` is
+ * empty), so its process's entrypoint is what says it is the panel.
+ */
+async function isPanel($: any): Promise<boolean> {
+  const surfaces = await $.session.surfaces()
+  if (surfaces.includes('vscode')) return true
+  return surfaces.length === 0 && (await $.env.get('CLAUDE_CODE_ENTRYPOINT')) === 'claude-vscode'
+}
+
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     await $.command.register({
@@ -203,7 +214,7 @@ export const register: Register = on => {
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
     if (e.agentId) return r
-    if (!(await $.session.surfaces()).includes('vscode')) return r
+    if (!(await isPanel($))) return r
     if (await read($, isHidden)) return r
 
     await refresh($, true).catch(() => {})
