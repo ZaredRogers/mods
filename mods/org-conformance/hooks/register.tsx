@@ -44,7 +44,7 @@ async function findRepos($: any): Promise<string[]> {
   const found = await sh($, [
     'bash',
     '-c',
-    `find ${JSON.stringify(root)} -maxdepth 5 -type d -name .git -not -path '*/node_modules/*' -not -path '*/vendor/*' 2>/dev/null | head -12`,
+    `find ${JSON.stringify(root)} -maxdepth 5 -type d -name .git -not -path '*/node_modules/*' -not -path '*/vendor/*' 2>/dev/null | sort | head -60`,
   ])
   return found.stdout
     .split('\n')
@@ -148,6 +148,19 @@ async function repoAt($: any, path: string): Promise<string | null> {
   return found === '' ? null : found
 }
 
+/** Puts the repo `path` sits in (absolute, ~, or relative to the session root) in focus. */
+async function touch($: any, path: string) {
+  if (path.startsWith('-') || path.includes('$')) return
+  const home = (await $.env.get('HOME')) ?? ''
+  const absolute = path.startsWith('/')
+    ? path
+    : path === '~' || path.startsWith('~/')
+      ? `${home}${path.slice(1)}`
+      : `${await $.session.root()}/${path}`
+  const found = await repoAt($, absolute)
+  if (found !== null && !NOT_ORG.test(found)) touched = found
+}
+
 async function refresh($: any, isForced = false) {
   const now = await $.clock.now()
   if (!isForced && now - checkedAt < STALE_MS) return
@@ -159,7 +172,9 @@ async function refresh($: any, isForced = false) {
     return
   }
 
-  const pick = touched && roots.includes(touched) ? touched : roots[0]
+  // The repo the work touched wins, even one the scan did not list; the
+  // first repo is only the band's fallback before anything was touched.
+  const pick = touched ?? roots[0]
   const active = await statusOf($, pick)
 
   let offStandard = 0
@@ -219,7 +234,9 @@ export const register: Register = on => {
 
     await refresh($, true).catch(() => {})
     const active = (await read($, status))?.active
-    if (!active || (active.isValid && active.hasDevelop)) return r
+    // Only a repo this session actually worked in: never the scan's fallback.
+    if (!active || touched === null || active.root !== touched) return r
+    if (active.isValid && active.hasDevelop) return r
 
     const key = `${active.root}@${active.branch}`
     if (warned.has(key)) return r
@@ -259,16 +276,23 @@ export const register: Register = on => {
       }
     }
 
-    const named = /(?:-C\s+|cd\s+)(\/[^\s;&|'"]*)/.exec(command)?.[1]
-    if (named !== undefined) {
-      const found = await repoAt($, named)
-      if (found !== null) touched = found
+    for (const hit of command.matchAll(/(?:-C\s+|cd\s+)(["']?)([^\s;&|'"]+)\1/g)) {
+      await touch($, hit[2])
     }
 
     const ran = await next(e)
     if (/\bgit\b/.test(command)) refresh($, true).catch(() => {})
 
     return ran
+  })
+
+  /** A file the model reads or writes puts its repo in focus too. */
+  on('tool.call', async ($, e, next) => {
+    const path = (e as any).file_path ?? (e as any).notebook_path
+    if (e.tool !== 'Bash' && typeof path === 'string' && path.startsWith('/')) {
+      await touch($, path.replace(/\/[^/]*$/, '') || '/')
+    }
+    return next(e)
   })
 
   on('command.run', { command: 'branch' }, async ($, e) => {

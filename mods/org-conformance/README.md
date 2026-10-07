@@ -28,7 +28,7 @@ inline (`✗ not {type}/{scope}-{title}`, `· no develop`). `+n off-standard` co
 repos in the workspace on non-conformant branches.
 
 The repo shown follows the work: the mod tracks the last repo a Bash call touched via `-C` or
-`cd`, which matters here because the SD workspace root is not a git repo while the theme and
+`cd` (absolute, `~` or relative to the workspace root), or a file the model read or wrote, which matters here because the SD workspace root is not a git repo while the theme and
 plugin beneath it are. `hide` dismisses the band for the session.
 
 Refreshes on prompt submit (throttled to 5s) and after any `git` command.
@@ -36,8 +36,10 @@ Refreshes on prompt submit (throttled to 5s) and after any `git` command.
 ## In the VS Code panel
 
 The VS Code chat panel draws no band, toast or status line — only the AskUserQuestion dialog.
-There, when the active repo is off-standard (invalid branch name, or no `develop`), the mod asks
-about it **once per repo and branch**, at the end of a turn so it never pauses work mid-turn:
+There, when the repo **this session is working in** is off-standard (invalid branch name, or no
+`develop`), the mod asks about it **once per repo and branch**, at the end of a turn so it never
+pauses work mid-turn. Switching to another repo warns about that one only; a repo the session
+never touched is never warned about, whatever the scan found first:
 *Keep warning me* or *Hide for this session*. The terminal and the desktop app keep the band.
 
 `agent-skills/` and `.agents/` are skipped everywhere: they are clones of other people's repos
