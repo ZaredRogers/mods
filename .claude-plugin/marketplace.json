@@ -26,7 +26,7 @@
     {
       "name": "org-conformance",
       "description": "A branch line above the prompt, and /branch and /pr, driven by the org's own validator and PR templates in ~/.github.",
-      "version": "0.2.2",
+      "version": "0.2.3",
       "source": "./mods/org-conformance"
     },
     {

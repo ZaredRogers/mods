@@ -42,6 +42,13 @@ pauses work mid-turn. Switching to another repo warns about that one only; a rep
 never touched is never warned about, whatever the scan found first:
 *Keep warning me* or *Hide for this session*. The terminal and the desktop app keep the band.
 
+**Typing under *Other* cuts the branch.** Whatever you type in the dialog's *Other* field is
+taken as a `/branch` description (or a name, if it is already `{type}/{scope}-{title}`) and runs
+exactly as `/branch` does: Haiku proposes, the org validator checks, and it is cut from `develop`
+— or refused, with the reason, when there is no `develop` or there are uncommitted files. The
+outcome comes back in the same dialog, since the panel shows nothing else; a refused name can be
+retried there by typing again under *Other* (up to three tries). `/branch` still works as before.
+
 `agent-skills/` and `.agents/` are skipped everywhere: they are clones of other people's repos
 and follow their own branch rules.
 
@@ -90,7 +97,7 @@ rejects. Everything else about git is left alone — `wp-guardrails` handles com
 
 ## Files
 
-- `tests/panel.test.ts` — the panel warning: once per repo and branch, never in the terminal
+- `tests/panel.test.ts` — the panel warning: once per repo and branch, never in the terminal; a description under *Other* cuts the branch
 
 - `hooks/register.tsx` — band, commands, branch-name gate
 - `types/index.d.ts` — the `$.state` contract (`status`, `isHidden`)
