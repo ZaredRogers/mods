@@ -1,0 +1,6 @@
+{
+  "name": "model-policy",
+  "version": "0.1.0",
+  "description": "Holds every subagent spawn to one model rule table: caps an inherited model, refuses an over-tier one without an Escalation line",
+  "author": { "name": "Zared Rogers" }
+}

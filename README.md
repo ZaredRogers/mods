@@ -17,8 +17,10 @@ workspace, not against a hunch. The counts are in each mod's README.
 | [browser-arbiter](mods/browser-arbiter/) | Pins the session to one browser MCP so playwright and chrome-devtools can't fight over one profile. | `/browser-release` |
 | [changelog-guard](mods/changelog-guard/) | Runs the org's Changelog Quality rules as entries are written, before CI blocks the merge. | `/changelog` |
 | [next-steps](mods/next-steps/) | 2–3 likely next prompts after each turn. Fork of the community mod, adding `/next` for the VS Code panel. | `/next` |
+| [model-policy](mods/model-policy/) | Holds every subagent spawn to one rule table: an inherited Opus runs at the task's cap, an over-tier model is refused without an `Escalation:` line. | `/model-policy` |
 
-Three of them (`secret-sentinel`, `wp-guardrails`, `browser-arbiter`) **deny** tool calls.
+Three of them (`secret-sentinel`, `wp-guardrails`, `browser-arbiter`) **deny** tool calls;
+`model-policy` denies or rewrites subagent spawns.
 Three (`verify-gate`, `org-conformance`, `changelog-guard`) only report — except
 `org-conformance`, which also denies a non-conformant branch name.
 
@@ -34,6 +36,7 @@ So each mod with UI detects the panel — which reports **no surface at all** (`
 | verify-gate, changelog-guard | ask once at turn end about that turn's findings; *Ask Claude to fix them* sends the request |
 | next-steps | `/next` asks the suggestions; the pick is sent |
 | wp-guardrails | nothing — its one toast is information only |
+| model-policy | nothing needed — its denies and rewrites work in the panel; only its toasts are lost |
 
 Measured on extension 2.1.292, 2026-10-07.
 

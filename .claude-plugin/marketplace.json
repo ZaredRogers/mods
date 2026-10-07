@@ -46,6 +46,12 @@
       "description": "Likely next prompts after each turn; /next asks them as a question for the VS Code panel. Fork of hamzafer/claude-code-mods next-steps (MIT).",
       "version": "0.2.0",
       "source": "./mods/next-steps"
+    },
+    {
+      "name": "model-policy",
+      "description": "Holds every subagent spawn to one model rule table: an inherited model runs at the cap, an over-tier one is refused unless the prompt carries an Escalation line. /model-policy shows the table.",
+      "version": "0.1.0",
+      "source": "./mods/model-policy"
     }
   ]
 }
