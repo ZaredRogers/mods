@@ -1,6 +1,6 @@
 {
   "name": "verify-gate",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "description": "Catches lint, test and PHP failures that exit 0 or are hidden by a | tail pipe",
   "author": {
     "name": "Zared Rogers"

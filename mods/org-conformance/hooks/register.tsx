@@ -190,6 +190,82 @@ async function refresh($: any, isForced = false) {
 }
 
 /**
+ * Name a branch from `asked` (a description, or a name already well formed),
+ * check it against the org validator and cut it from develop. Shared by
+ * /branch and the panel warning's "Other" answer; resolves to the reply.
+ */
+async function cutBranch($: any, asked: string): Promise<string> {
+  await refresh($, true)
+  const active = (await read($, status))?.active
+  if (!active) return 'org-conformance: no git repository found here.'
+
+  // Already a well-formed name? Use it. Otherwise ask Haiku for one.
+  let name = asked
+  let note = ''
+  if (!/^[a-z0-9-]+\/[a-z0-9-]+$/.test(asked)) {
+    const org = await orgRoot($)
+    const allowed = (await sh($, ['bash', '-c', `sed -n '/^branch_types:/,$p' ${org}/${TYPE_MAP} | grep -oE '^  [a-z0-9-]+:' | tr -d ' :' | paste -sd, -`])).stdout.trim()
+    const reply = await $.model.complete({
+      model: 'haiku',
+      effort: 'low',
+      maxTokens: 40,
+      system:
+        'You name git branches for LightSpeedWP. Answer with one branch name and nothing else. Form: {type}/{scope}-{title}. Lowercase, digits and single hyphens only. No underscores, dots, spaces or consecutive hyphens. Exactly one slash.',
+      prompt: `Allowed types: ${allowed}\n\nWork described as: ${asked}\n\nBranch name:`,
+    })
+    if (!reply.isAnswered) return 'org-conformance: could not reach the model to propose a name.'
+    name = reply.text.trim().split(/\s+/)[0]
+    note = `(proposed by haiku from "${asked}")\n`
+  }
+
+  const checked = await validate($, name)
+  if (!checked.isValid) {
+    return `${note}"${name}" still fails the org standard: ${checked.reason}\nNothing was created.`
+  }
+
+  if (!active.hasDevelop) {
+    return `${note}"${name}" is conformant, but ${active.name} has no "${BASE}" branch.\nCreate the base first, then re-run:\n  git -C ${active.root} branch ${BASE}\nNothing was created.`
+  }
+  if (active.dirty > 0) {
+    return `${note}"${name}" is conformant, but ${active.name} has ${active.dirty} uncommitted file(s) — switching now would carry them across.\nDeal with those, then:\n  git -C ${active.root} checkout -b ${name} ${BASE}\nNothing was created.`
+  }
+
+  const made = await git($, active.root, 'checkout', '-b', name, BASE)
+  await refresh($, true)
+  return made.exitCode === 0
+    ? `${note}Created "${name}" from ${BASE} in ${active.name}. Nothing staged or committed.`
+    : `${note}git refused: ${made.stderr.trim() || made.stdout.trim()}`
+}
+
+const KEEP = 'Keep warning me'
+const HIDE = 'Hide for this session'
+const ROUNDS = 3
+
+/**
+ * The panel's warning dialog. Anything typed under "Other" is a branch
+ * description, cut as /branch would; the outcome comes back in the same
+ * dialog, since the panel draws nothing else, so a refusal can be retried.
+ */
+async function offerBranch($: any, question: string): Promise<void> {
+  for (let round = 0; round < ROUNDS; round++) {
+    const pick = (await $.ui.ask(question, { header: 'Branch', options: [KEEP, HIDE] })).trim()
+    if (pick === HIDE) return void (await update($, isHidden, () => true))
+    if (pick === KEEP || !pick) return
+
+    const outcome = await cutBranch($, pick)
+    if (/^(?:\(proposed[^\n]*\n)?Created "/.test(outcome)) {
+      const done = await $.ui.ask(`${outcome}\n\nHide branch warnings for this session?`, {
+        header: 'Branch',
+        options: [KEEP, HIDE],
+      })
+      if (done.trim() === HIDE) await update($, isHidden, () => true)
+      return
+    }
+    question = `${outcome}\n\nType another description under Other to try again. Hide these warnings?`
+  }
+}
+
+/**
  * True in the VS Code chat panel, which draws no band, toast or status line.
  * Measured on 2.1.292: the panel reports no surface at all (`surfaces()` is
  * empty), so its process's entrypoint is what says it is the panel.
@@ -247,13 +323,10 @@ export const register: Register = on => {
       !active.hasDevelop && `there is no ${BASE} branch`,
     ].filter(Boolean)
 
-    void $.ui
-      .ask(
-        `${active.name}: ${problems.join('; ')}. Run /branch <description> for a conformant name. Hide these warnings?`,
-        { header: 'Branch', options: ['Keep warning me', 'Hide for this session'] },
-      )
-      .then(pick => (pick === 'Hide for this session' ? update($, isHidden, () => true) : undefined))
-      .catch(() => {})
+    void offerBranch(
+      $,
+      `${active.name}: ${problems.join('; ')}. Type a description under Other to cut a conformant branch from ${BASE}, or run /branch <description>. Hide these warnings?`,
+    ).catch(() => {})
 
     return r
   })
@@ -296,61 +369,15 @@ export const register: Register = on => {
   })
 
   on('command.run', { command: 'branch' }, async ($, e) => {
-    await refresh($, true)
-    const now = await read($, status)
-    const active = now?.active
-    if (!active) return { text: 'org-conformance: no git repository found here.' }
-
     const asked = e.args.trim()
-    if (!asked) {
-      const verdict = active.isValid ? 'conformant' : `NOT conformant — ${active.reason}`
-      return {
-        text: `${active.name} is on "${active.branch}" (${verdict}).\nBase "${BASE}" ${active.hasDevelop ? 'exists' : 'is MISSING'}; ${active.dirty} uncommitted file(s).\n\nGive me a description to get a name: /branch 404 template for the theme`,
-      }
-    }
+    if (asked) return { text: await cutBranch($, asked) }
 
-    // Already a well-formed name? Use it. Otherwise ask Haiku for one.
-    let name = asked
-    let note = ''
-    if (!/^[a-z0-9-]+\/[a-z0-9-]+$/.test(asked)) {
-      const org = await orgRoot($)
-      const allowed = (await sh($, ['bash', '-c', `sed -n '/^branch_types:/,$p' ${org}/${TYPE_MAP} | grep -oE '^  [a-z0-9-]+:' | tr -d ' :' | paste -sd, -`])).stdout.trim()
-      const reply = await $.model.complete({
-        model: 'haiku',
-        effort: 'low',
-        maxTokens: 40,
-        system:
-          'You name git branches for LightSpeedWP. Answer with one branch name and nothing else. Form: {type}/{scope}-{title}. Lowercase, digits and single hyphens only. No underscores, dots, spaces or consecutive hyphens. Exactly one slash.',
-        prompt: `Allowed types: ${allowed}\n\nWork described as: ${asked}\n\nBranch name:`,
-      })
-      if (!reply.isAnswered) return { text: 'org-conformance: could not reach the model to propose a name.' }
-      name = reply.text.trim().split(/\s+/)[0]
-      note = `(proposed by haiku from "${asked}")\n`
-    }
-
-    const checked = await validate($, name)
-    if (!checked.isValid) {
-      return { text: `${note}"${name}" still fails the org standard: ${checked.reason}\nNothing was created.` }
-    }
-
-    if (!active.hasDevelop) {
-      return {
-        text: `${note}"${name}" is conformant, but ${active.name} has no "${BASE}" branch.\nCreate the base first, then re-run:\n  git -C ${active.root} branch ${BASE}\nNothing was created.`,
-      }
-    }
-    if (active.dirty > 0) {
-      return {
-        text: `${note}"${name}" is conformant, but ${active.name} has ${active.dirty} uncommitted file(s) — switching now would carry them across.\nDeal with those, then:\n  git -C ${active.root} checkout -b ${name} ${BASE}\nNothing was created.`,
-      }
-    }
-
-    const made = await git($, active.root, 'checkout', '-b', name, BASE)
     await refresh($, true)
+    const active = (await read($, status))?.active
+    if (!active) return { text: 'org-conformance: no git repository found here.' }
+    const verdict = active.isValid ? 'conformant' : `NOT conformant — ${active.reason}`
     return {
-      text:
-        made.exitCode === 0
-          ? `${note}Created "${name}" from ${BASE} in ${active.name}. Nothing staged or committed.`
-          : `${note}git refused: ${made.stderr.trim() || made.stdout.trim()}`,
+      text: `${active.name} is on "${active.branch}" (${verdict}).\nBase "${BASE}" ${active.hasDevelop ? 'exists' : 'is MISSING'}; ${active.dirty} uncommitted file(s).\n\nGive me a description to get a name: /branch 404 template for the theme`,
     }
   })
 

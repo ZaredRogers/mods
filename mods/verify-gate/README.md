@@ -25,6 +25,7 @@ Commands treated as checks:
 npm/npx/pnpm/yarn run lint|check|test|stan|typecheck
 phpcs   phpcbf   php -l   phpunit   composer check|stan|test|lint
 eslint  stylelint  tsc  node --check  playwright test
+claude plugin test|validate  bun test
 ```
 
 Patterns it recognises in the output, in order:
@@ -35,6 +36,7 @@ Patterns it recognises in the output, in order:
 | `n problems` / `✖ n` | lint problems |
 | `Found n errors` | errors |
 | `n failed` / `n tests failed` | failures |
+| `n fail` / `(fail)` (bun, `claude plugin test`) | test failures |
 | `[ERROR]` | reported error |
 | `PHP Parse error` / `Fatal error` | PHP fatal |
 | `npm ERR!` | npm error |
@@ -42,6 +44,11 @@ Patterns it recognises in the output, in order:
 | `Errors parsing` | parse error |
 
 Counted patterns only fire on a count greater than zero, so `0 problems` reads as a pass.
+
+A check whose tool is not installed did not run, so it did not fail. When npx reports
+`canceled due to missing packages` or `could not determine executable to run`, the
+`npm error` row stands down. Before this, `npx --no-install tsc -v` flagged a false
+"npm error" twice.
 
 ## What you see
 
@@ -63,7 +70,10 @@ output. The point is that the output can no longer be mistaken for a pass.
 
 ## Known gaps
 
-- It scans the first 20,000 characters of the result. A violation buried deeper in a very
+- It scans only the output the model reads (stdout and stderr), never the rest of the tool's
+  record, which carries a diff of every file the command edited. Before 0.3.0 it scanned the
+  whole record, so writing `FOUND 3 ERRORS` into a test fixture read as a phpcs failure.
+- It scans the first 20,000 characters of that output. A violation buried deeper in a very
   long run is missed.
 - A check with a failure format not in the table above passes silently. Add the pattern to
   `RULES` in `hooks/register.ts` when you meet one.
@@ -72,11 +82,16 @@ output. The point is that the output can no longer be mistaken for a pass.
 
 The VS Code chat panel draws no toast or status line — only the AskUserQuestion dialog. There,
 the turn's check failures are collected and asked about **once, when the turn ends** (asking mid-turn
-would pause the model): *Ask Claude to fix them* sends a fix request as the next prompt,
+would pause the model): *Ask Claude to fix them* hands the failures to a `general-purpose` subagent pinned to
+**Sonnet** (`FIX_MODEL` in `hooks/register.ts`, model-policy's cap for a fix task), and relays
+its report back to the session when it finishes. `$.prompt.submit` takes no model, so a
+subagent is the only way to hold the fix to a model.
 *Dismiss* drops them. The terminal and the desktop app keep the toast.
 
 ## Files
 
 - `hooks/register.ts` — the check matcher and the output scanner
 - `tests/verify-gate.test.ts` — one case per pattern, plus the `0 problems` pass
-- `tests/panel.test.ts` — the end-of-turn question in the panel, and silence in the terminal
+- `tests/panel.test.ts` — the end-of-turn question in the panel, the Sonnet fix subagent, and
+  silence in the terminal. The relay of the subagent's report isn't tested: the test harness
+  drops `agentId` from a mocked spawn, so that path needs a live check.

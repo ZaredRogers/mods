@@ -7,16 +7,23 @@ const run = (stdout: string, exitCode = 0) => ({
 })
 
 // A workspace like SD's: the root is no repo; the theme and an upstream clone are.
-function engine(on: any, surface: string, branches: Record<string, string>) {
+// `answers` are what the person picks in each dialog, in order; free text is "Other".
+// `names` are Haiku's replies to successive descriptions.
+function engine(on: any, surface: string, branches: Record<string, string>, answers: string[] = [], names: string[] = []) {
   const asked: string[] = []
+  const cuts: string[] = []
   mock.env(on, { HOME: '/home/test', CLAUDE_CODE_ENTRYPOINT: surface === 'panel' ? 'claude-vscode' : 'cli' })
   mock.clock(on, { now: 100000 })
   on('session.root', () => ({ value: '/work' }))
   on('session.surfaces', () => ({ value: surface === 'panel' ? [] : [surface] }))
   on('turn.complete', () => ({ text: '' }))
+  on('model.complete', () => ({
+    value: { isAnswered: true, text: names.shift() ?? 'feat/theme-404-template', usage: { input_tokens: 1, output_tokens: 1 } },
+  }))
   on('process.run', (_$: any, e: any) => {
     const argv: string[] = [...e.argv]
     const line = argv.join(' ')
+    if (line.includes('checkout -b')) cuts.push(argv[argv.indexOf('-b') + 1])
     if (line.includes('validate-branch-name')) return run('', VERDICT.test(argv[argv.length - 1]) ? 0 : 1)
     if (line.includes('find ')) return run('/work/agent-skills/.git\n/work/plugin/.git\n/work/to-specials/.git\n/work/theme/.git\n')
     const repo = argv[0] === 'git' ? argv[2] : ''
@@ -32,9 +39,10 @@ function engine(on: any, surface: string, branches: Record<string, string>) {
   on('tool.call', (_$: any, e: any) => {
     if (e.tool !== 'AskUserQuestion') return { result: { stdout: '', stderr: '' } }
     asked.push(e.questions[0].question)
-    return { result: { questions: e.questions, answers: { [e.questions[0].question]: 'Keep warning me' } } }
+    const answer = answers.shift() ?? 'Keep warning me'
+    return { result: { questions: e.questions, answers: { [e.questions[0].question]: answer } } }
   })
-  return { asked }
+  return { asked, cuts }
 }
 
 const bash = ($: any, command: string) => $.tool.call({ tool: 'Bash', command })
@@ -105,5 +113,39 @@ describe('org-conformance in the VS Code panel', () => {
     expect(asked[0]).toContain('"fixes"')
     expect(asked[1]).toContain('plugin')
     expect(asked[1]).not.toContain('theme')
+  })
+
+  test('a description typed under Other cuts a conformant branch from develop', async ($, on) => {
+    const { asked, cuts } = engine(on, 'panel', { '/work/theme': 'fixes' }, ['404 template for the theme', 'Keep warning me'])
+    await bash($, 'cd /work/theme && git status')
+    await endTurn($, 't1')
+    expect(asked[0]).toContain('under Other')
+    expect(cuts).toEqual(['feat/theme-404-template'])
+    expect(asked.length).toBe(2)
+    expect(asked[1]).toContain('Created "feat/theme-404-template" from develop')
+  })
+
+  test('a rejected proposal is reported and can be retried in the same dialog', async ($, on) => {
+    const { asked, cuts } = engine(
+      on,
+      'panel',
+      { '/work/theme': 'fixes' },
+      ['the 404 page', 'theme 404 template', 'Hide for this session'],
+      ['feature/404', 'fix/theme-404-template'],
+    )
+    await bash($, 'cd /work/theme && git status')
+    await endTurn($, 't1')
+    expect(asked[1]).toContain('"feature/404" still fails the org standard')
+    expect(asked[1]).toContain('try again')
+    expect(cuts).toEqual(['fix/theme-404-template'])
+    expect(asked[2]).toContain('Created "fix/theme-404-template"')
+  })
+
+  test('picking an option never cuts a branch', async ($, on) => {
+    const { asked, cuts } = engine(on, 'panel', { '/work/theme': 'fixes' }, ['Hide for this session'])
+    await bash($, 'cd /work/theme && git status')
+    await endTurn($, 't1')
+    expect(asked.length).toBe(1)
+    expect(cuts.length).toBe(0)
   })
 })
