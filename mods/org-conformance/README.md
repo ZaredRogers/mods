@@ -90,15 +90,35 @@ template too, so the command always returns something usable.
 
 **It prints the body — it does not open the PR.** Opening it is yours.
 
-## The one thing it denies
+## When the agent opens the PR
 
-`git checkout -b` / `git switch -c` / `git branch <name>` with a name the org validator
-rejects. Everything else about git is left alone — `wp-guardrails` handles commit and push.
+`/pr` is a slash command, so only you can run it. When you ask the agent to open a PR, the
+agent runs `gh pr create`, and the mod checks that command against the same routing first:
+
+- the **title** must start with the fixed part of the template's own `title:` frontmatter
+  (`test: {scope} - {short description}` → `test: `);
+- the **body** must keep every `##` heading of the template, whether passed inline
+  (`--body`, a heredoc) or with `--body-file` / `-F`.
+
+If either fails, the call is refused. The mod fills the template the way `/pr` does, writes the
+draft to `$TMPDIR/org-conformance/pr-<repo>-<branch>.md`, and the refusal names that file and the
+title pattern. The agent's retry then uses the right template, without you having to point it
+there. `--head` / `-H` routes by that branch instead of the checked-out one. If the mod cannot
+read `~/.github`, or something in the check fails, the PR goes through unchecked: it fails open.
+
+## What it denies
+
+- `git checkout -b` / `git switch -c` / `git branch <name>` with a name the org validator
+  rejects.
+- `gh pr create` whose title or body does not follow the branch's PR template (above).
+
+Everything else about git is left alone — `wp-guardrails` handles commit and push.
 
 ## Files
 
 - `tests/panel.test.ts` — the panel warning: once per repo and branch, never in the terminal; a description under *Other* cuts the branch
 
-- `hooks/register.tsx` — band, commands, branch-name gate
+- `hooks/register.tsx` — band, commands, branch-name gate, PR template gate
 - `types/index.d.ts` — the `$.state` contract (`status`, `isHidden`)
 - `tests/org-conformance.test.ts`
+- `tests/pr-gate.test.ts` — the `gh pr create` gate: wrong title and body refused with a draft, inline and `--body-file` bodies let through

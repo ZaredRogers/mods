@@ -95,6 +95,104 @@ async function templateFor($: any, branch: string): Promise<string | null> {
   return null
 }
 
+/** The template's text, or '' when it cannot be read. */
+async function templateText($: any, template: string): Promise<string> {
+  return (await sh($, ['cat', `${await orgRoot($)}/${TEMPLATES}/${template}.md`])).stdout
+}
+
+/** The template minus its YAML frontmatter: what a PR body should look like. */
+const bodyOf = (template: string) => template.replace(/^---\n[\s\S]*?\n---\n+/, '')
+
+/** The `##` headings a body must keep, read from the template itself. */
+const headingsOf = (template: string) =>
+  bodyOf(template)
+    .split('\n')
+    .filter(line => /^##\s+\S/.test(line))
+    .map(line => line.trim())
+
+/** The fixed part of the template's `title:` pattern, e.g. "test: " from "test: {scope} - …". */
+function titlePrefixOf(template: string): { pattern: string; prefix: string } | null {
+  const said = /^title:\s*["']?(.*?)["']?\s*$/m.exec(template.split(/\n---\n/)[0] ?? '')
+  if (!said) return null
+  return { pattern: said[1], prefix: said[1].split('{')[0] }
+}
+
+/** Fill the template from the branch's commits and changed files; null when the model is unreachable. */
+async function fillTemplate($: any, active: RepoStatus, template: string): Promise<string | null> {
+  const diff = (await git($, active.root, 'diff', '--stat', `${BASE}...HEAD`)).stdout
+  const log = (await git($, active.root, 'log', '--oneline', `${BASE}..HEAD`)).stdout
+
+  const reply = await $.model.complete({
+    model: 'sonnet',
+    effort: 'low',
+    maxTokens: 1600,
+    system:
+      'You fill in a pull request template. Keep every heading and checklist the template has, in its order. Fill only what the evidence supports; leave a section empty rather than inventing. Output the completed markdown and nothing else.',
+    prompt: `Branch: ${active.branch}\nRepo: ${active.name}\n\nCommits:\n${log || '(none)'}\n\nChanged files:\n${diff || '(none)'}\n\nTemplate:\n${bodyOf(template)}`,
+  })
+
+  return reply.isAnswered ? reply.text : null
+}
+
+/** The value of `--flag value`, `--flag=value` or `--flag "quoted value"` in a command. */
+function flag(command: string, names: string[]): string | null {
+  const alt = names.map(n => n.replace(/-/g, '\\-')).join('|')
+  const hit = new RegExp(`(?:^|\\s)(?:${alt})(?:\\s+|=)(?:"((?:[^"\\\\]|\\\\.)*)"|'([^']*)'|([^\\s;&|]+))`).exec(command)
+  return hit ? (hit[1] ?? hit[2] ?? hit[3] ?? '') : null
+}
+
+/**
+ * Check a `gh pr create` against the org template its branch routes to.
+ * Resolves to the refusal text, or null when the PR conforms.
+ */
+async function checkPr($: any, command: string, cwd: string | null): Promise<string | null> {
+  const root = touched ?? (await repoAt($, cwd ?? (await $.session.root())))
+  if (!root) return null
+  const active = await statusOf($, root)
+  const head = flag(command, ['--head', '-H'])
+  if (head) {
+    const { isValid, reason } = await validate($, head)
+    Object.assign(active, { branch: head, isValid, reason, template: await templateFor($, head) })
+  }
+
+  if (!active.template) {
+    return `org-conformance: "${active.branch}" has no org branch type, so no PR template routes to it${active.isValid ? '' : ` (${active.reason})`}. Cut a conformant branch first — the user can run /branch.`
+  }
+  const template = await templateText($, active.template)
+  if (!template.trim()) return null
+
+  const problems: string[] = []
+
+  const want = titlePrefixOf(template)
+  const title = flag(command, ['--title', '-t'])
+  if (want && !(title ?? '').startsWith(want.prefix)) {
+    problems.push(title === null ? 'no --title' : `title "${title}" does not start with "${want.prefix}"`)
+  }
+
+  let body = command
+  const file = flag(command, ['--body-file', '-F'])
+  if (file && file !== '-') {
+    const path = file.startsWith('/') ? file : `${cwd ?? active.root}/${file}`
+    body += `\n${await $.fs.read(path).catch(() => '')}`
+  }
+  const missing = headingsOf(template).filter(h => !body.split('\n').some(line => line.trim() === h))
+  if (missing.length > 0) problems.push(`body is missing ${missing.length} of the template's headings (${missing.slice(0, 3).join(', ')}${missing.length > 3 ? ', …' : ''})`)
+
+  if (problems.length === 0) return null
+
+  const filled = (await fillTemplate($, active, template)) ?? bodyOf(template)
+  const tmp = ((await $.env.get('TMPDIR')) ?? '/tmp/').replace(/\/?$/, '/')
+  const draft = `${tmp}org-conformance/pr-${active.name}-${active.branch.replace(/[^a-z0-9]+/gi, '-')}.md`
+  await $.fs.write(draft, filled)
+
+  return [
+    `org-conformance: this PR does not follow the org template. Branch "${active.branch}" routes to ${active.template}.md; ${problems.join('; ')}.`,
+    `A filled draft is at ${draft} — read it, complete any empty sections from what you know of the work (never invent), then re-run with:`,
+    `  --title "${want?.pattern ?? '…'}"   (fill the placeholders)`,
+    `  --body-file ${draft}`,
+  ].join('\n')
+}
+
 async function statusOf($: any, root: string): Promise<RepoStatus> {
   const branch = (await git($, root, 'rev-parse', '--abbrev-ref', 'HEAD')).stdout.trim()
   const dirty = (await git($, root, 'status', '--porcelain')).stdout
@@ -349,8 +447,16 @@ export const register: Register = on => {
       }
     }
 
+    let cwd: string | null = null
     for (const hit of command.matchAll(/(?:-C\s+|cd\s+)(["']?)([^\s;&|'"]+)\1/g)) {
       await touch($, hit[2])
+      if (hit[0].startsWith('cd')) cwd = hit[2].startsWith('/') ? hit[2] : `${await $.session.root()}/${hit[2]}`
+    }
+
+    // A PR opened by the model must use the org template its branch routes to.
+    if (/\bgh\s+pr\s+create\b/.test(command)) {
+      const refused = await checkPr($, command, cwd).catch(() => null)
+      if (refused) return { deny: refused }
     }
 
     const ran = await next(e)
@@ -391,30 +497,20 @@ export const register: Register = on => {
       }
     }
 
-    const org = await orgRoot($)
-    const path = `${org}/${TEMPLATES}/${active.template}.md`
-    const body = (await sh($, ['cat', path])).stdout
-    if (!body.trim()) return { text: `org-conformance: template ${active.template} not found at ${path}.` }
+    const body = await templateText($, active.template)
+    if (!body.trim()) {
+      return { text: `org-conformance: template ${active.template} not found in ${await orgRoot($)}/${TEMPLATES}.` }
+    }
 
     const wants = e.args.trim() === 'raw'
     if (wants) return { text: `Template for "${active.branch}" -> ${active.template}\n\n${body}` }
 
-    const diff = (await git($, active.root, 'diff', '--stat', `${BASE}...HEAD`)).stdout
-    const log = (await git($, active.root, 'log', '--oneline', `${BASE}..HEAD`)).stdout
+    const filled = await fillTemplate($, active, body)
+    if (filled === null) return { text: `Template for "${active.branch}" -> ${active.template}\n\n${body}` }
 
-    const reply = await $.model.complete({
-      model: 'sonnet',
-      effort: 'low',
-      maxTokens: 1600,
-      system:
-        'You fill in a pull request template. Keep every heading and checklist the template has, in its order. Fill only what the evidence supports; leave a section empty rather than inventing. Output the completed markdown and nothing else.',
-      prompt: `Branch: ${active.branch}\nRepo: ${active.name}\n\nCommits:\n${log || '(none)'}\n\nChanged files:\n${diff || '(none)'}\n\nTemplate:\n${body}`,
-    })
-
-    if (!reply.isAnswered) return { text: `Template for "${active.branch}" -> ${active.template}\n\n${body}` }
-
+    const title = titlePrefixOf(body)
     return {
-      text: `${active.template} (routed from type "${active.branch.split('/')[0]}")\n\n${reply.text}`,
+      text: `${active.template} (routed from type "${active.branch.split('/')[0]}")${title ? `\nTitle: ${title.pattern}` : ''}\n\n${filled}`,
     }
   })
 

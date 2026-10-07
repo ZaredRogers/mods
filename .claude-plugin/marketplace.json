@@ -25,8 +25,8 @@
     },
     {
       "name": "org-conformance",
-      "description": "A branch line above the prompt, and /branch and /pr, driven by the org's own validator and PR templates in ~/.github.",
-      "version": "0.2.3",
+      "description": "A branch line above the prompt, /branch and /pr, and a template gate on gh pr create, driven by the org's own validator and PR templates in ~/.github.",
+      "version": "0.3.0",
       "source": "./mods/org-conformance"
     },
     {
