@@ -24,9 +24,11 @@ the call's description, so "count the patterns" is capped at Haiku whichever age
 
 It hooks `agent.spawn`, which fires for every Agent tool call and every workflow `agent()`.
 
-1. **Match a rule.** A rule that names the agent type (`Explore`, `Plan`) wins. If none does,
-   the first rule whose keyword matches the call's `description` wins. If nothing matches, the
-   default applies.
+1. **Match a rule.** A rule marked `overridesAgent` whose keyword matches the `description`
+   wins first — that is `analysis`, so an `Explore` call that asks *why* or for *render
+   conditions* runs on Sonnet rather than Explore's Haiku. Then a rule that names the agent
+   type (`Explore`, `Plan`). Then the first rule whose keyword matches. If nothing matches,
+   the default applies.
 2. **Compare** the model the subagent would run on with that rule's cap:
 
 | The spawn | Over the cap → |
@@ -47,6 +49,7 @@ It is set in [`hooks/policy.ts`](hooks/policy.ts) and nowhere else:
 
 | Rule | Cap | Agent types | Keywords in the description (whole words) |
 |---|---|---|---|
+| analysis | sonnet | — (overrides agent type) | render condition(s), why, root cause, diagnose/diagnosis, investigate/investigation, analyse/analyze/analysis, trace, explain, inert, behaviour of |
 | mechanical | haiku | Explore, claude-code-guide | count, tally, inventory, enumerate, list, find, locate, where is, look up, grep, search, measure, catalogue, triage |
 | precedent | opus | Plan | first, precedent, pattern-setter, boundary, scope, architecture, architect, judgement, decide, decision |
 | follow-pattern | sonnet | — | phpcs, phpcbf, lint, changelog, PR text, PR description, release notes, token sweep, migrate, migration, port, fix, slice, template, pattern, implement, refactor, apply, test |

@@ -5,8 +5,9 @@
  * "Escalation:" line in the prompt. A project replaces this whole table with
  * its own .claude/model-policy.json, the same shape as JSON.
  *
- * Matching: a rule naming the agent type wins over a keyword match; within
- * each pass the first rule in this list wins; nothing matched uses `default`.
+ * Matching: a keyword rule marked `overridesAgent` wins first; then a rule
+ * naming the agent type; then any keyword match. Within each pass the first
+ * rule in this list wins; nothing matched uses `default`.
  * Keywords are regex fragments matched as whole words against the Agent
  * call's description, case-insensitively.
  */
@@ -19,6 +20,12 @@ export type Rule = {
   why: string
   agents?: string[]
   keywords?: string[]
+  /**
+   * When its keywords match, this rule beats an agent-type rule. For work
+   * that needs judgement but is run through a read-only agent type such as
+   * Explore, which would otherwise be capped at that type's tier.
+   */
+  overridesAgent?: boolean
 }
 
 export type Policy = {
@@ -32,6 +39,14 @@ export const SHIPPED: Policy = {
   default: "sonnet",
   workflow: "warn",
   rules: [
+    {
+      id: "analysis",
+      tier: "sonnet",
+      why: "Research that needs judgement — why something renders or doesn't, root causes, render conditions — runs on Sonnet, even through Explore. Haiku's answers to these were vague enough to need redoing (2026-10-08).",
+      overridesAgent: true,
+      agents: [],
+      keywords: ["render conditions?", "why", "root cause", "diagnos(e|is)", "investigat(e|ion)", "analy[sz](e|is)", "trace", "explain", "inert", "behaviou?r of"],
+    },
     {
       id: "mechanical",
       tier: "haiku",

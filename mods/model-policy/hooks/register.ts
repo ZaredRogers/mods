@@ -65,8 +65,14 @@ function keywordHit(rule: Rule, text: string): boolean {
   return (rule.keywords ?? []).some(k => new RegExp(`\\b(?:${k})\\b`, 'i').test(text))
 }
 
-/** An agent-type match wins over a keyword match; within each, table order. */
+/**
+ * An `overridesAgent` keyword match wins first, then an agent-type match, then
+ * any keyword match; within each, table order.
+ */
 function match(policy: Policy, agent: string, description: string): Rule {
+  const overriding = policy.rules.find(r => r.overridesAgent && keywordHit(r, description))
+  if (overriding) return overriding
+
   const byAgent = policy.rules.find(r => (r.agents ?? []).includes(agent))
   const byWords = policy.rules.find(r => keywordHit(r, description))
 

@@ -57,6 +57,34 @@ test('an agent-type rule wins over the description keywords', async ($, on) => {
   expect(String(got.deny)).toContain('Rule "mechanical"')
 })
 
+test('an analysis description lifts an Explore call to the sonnet cap', async ($, on) => {
+  const reached = engine(on)
+
+  // Explore alone is capped at haiku; "render conditions" is analysis.
+  const got = await spawn($, { description: 'Map plugin render conditions', subagentType: 'Explore', model: 'sonnet' })
+
+  expect(got.deny).toBeUndefined()
+  expect(reached[0]).toBe('sonnet')
+})
+
+test('an analysis description still caps Opus at sonnet', async ($, on) => {
+  const reached = engine(on)
+
+  const got = await spawn($, { description: 'Investigate why breadcrumbs are inert', subagentType: 'Explore', model: 'opus' })
+
+  expect(String(got.deny)).toContain('caps this kind of task at sonnet')
+  expect(reached.length).toBe(0)
+})
+
+test('a plain Explore lookup stays at haiku', async ($, on) => {
+  const reached = engine(on)
+
+  const got = await spawn($, { description: 'Find the gallery block files', subagentType: 'Explore', model: 'sonnet' })
+
+  expect(String(got.deny)).toContain('caps this kind of task at haiku')
+  expect(reached.length).toBe(0)
+})
+
 test('an Escalation line lets an over-cap model through', async ($, on) => {
   const reached = engine(on)
 
