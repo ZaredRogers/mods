@@ -53,3 +53,28 @@ test('does not fire when a heredoc merely mentions a credentials path', async ($
 
   expect(seen.length).toBe(1)
 })
+
+test('cuts a branch from a remote ref without tracking it', async ($, on) => {
+  const seen = engine(on)
+  await $.tool.call({ tool: 'Bash', command: 'git switch -c test/asd-36-alpha origin/develop' })
+
+  expect(seen[0]).toBe('git switch -c --no-track test/asd-36-alpha origin/develop')
+})
+
+test('covers checkout -b and git -C', async ($, on) => {
+  const seen = engine(on)
+  await $.tool.call({ tool: 'Bash', command: 'git -C repo checkout -b fix/asd-36-beta origin/develop && ls' })
+
+  expect(seen[0]).toBe('git -C repo checkout -b --no-track fix/asd-36-beta origin/develop && ls')
+})
+
+test('leaves a branch from a local ref, or an explicit --track, alone', async ($, on) => {
+  const seen = engine(on)
+  await $.tool.call({ tool: 'Bash', command: 'git switch -c fix/asd-36-gamma develop' })
+  await $.tool.call({ tool: 'Bash', command: 'git switch -c fix/asd-36-delta --track origin/fix/asd-36-delta' })
+
+  expect(seen).toEqual([
+    'git switch -c fix/asd-36-gamma develop',
+    'git switch -c fix/asd-36-delta --track origin/fix/asd-36-delta',
+  ])
+})
